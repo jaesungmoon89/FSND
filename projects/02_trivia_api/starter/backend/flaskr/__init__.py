@@ -136,14 +136,15 @@ def create_app(test_config=None):
   @app.route('/questions/add', methods=['POST'])
   def addQuestions():
     print('Add Questions')  
-    try:
-     body = request.get_json()
-     new_question = body.get('question',None)
-     new_answer = body.get('answer',None)
-     new_category = str(body.get('category',None))
-     new_difficulty = body.get('difficulty',None)
-     question = Question(question=new_question, answer=new_answer, category=new_category, difficulty=new_difficulty)
-      
+    
+    body = request.get_json()
+    new_question = body.get('question',None)
+    new_answer = body.get('answer',None)
+    new_category = body.get('category',None)
+    new_difficulty = body.get('difficulty',None)
+    question = Question(question=new_question, answer=new_answer, category=new_category, difficulty=new_difficulty)
+    
+    try:  
      question.insert()
       
      selection = Question.query.order_by(Question.id).all()
@@ -169,26 +170,27 @@ def create_app(test_config=None):
   only question that include that string within their question. 
   Try using the word "title" to start. 
   '''
-  @app.route('/questions/search', methods=['OPTIONS'])
+  @app.route('/questions/search', methods=['POST'])
   def getQuestionsBySearchTerm():   
     print('Get Questions by Search Term')
-    body = request.get_json()
-    searchTerm = body.get('searchTerm',None)
-    
-    question = Question.query.filter(Question.question.ilike('%{}%'.format(searchTerm))).all()
     try:
+     body = request.get_json()
+     searchTerm = body.get('searchTerm',None)
+    
+     question = Question.query.filter(Question.question.ilike('%{}%'.format(searchTerm))).all()
+    
      if question is None:
-        abort(404)  
+       abort(404)  
+     
      current_questions = createPagination(request, question)
        
      if (len(current_questions) == 0):
-        abort(404)  
+       abort(404)  
 
      return jsonify({
       'success': True,
       'questions': current_questions,
-      'totalQuestions': len(Question.query.all()),
-      'currentCategory': ''
+      'totalQuestions': len(Question.query.all())
      })
     except:
       abort(422)
@@ -203,21 +205,23 @@ def create_app(test_config=None):
   @app.route('/categories/<int:c_id>/questions', methods=['GET'])
   def getQuestionsByCategory(c_id):   
     print('Get Questions by Category')  
-    question = Question.query.filter(Question.category==c_id).all()
-    if question is None:
-        abort(404)  
-    current_questions = createPagination(request, question)
+    try:
+     question = Question.query.filter(Question.category==c_id).all()
+     if question is None:
+         abort(404)  
+     current_questions = createPagination(request, question)
        
-    if (len(current_questions) == 0):
-        abort(404)  
+     if (len(current_questions) == 0):
+         abort(404)  
 
-    return jsonify({
-      'success': True,
-      'questions': current_questions,
-      'totalQuestions': len(current_questions),
-      'currentCategory': ''
-    })
-
+     return jsonify({
+       'success': True,
+       'questions': current_questions,
+       'totalQuestions': len(current_questions),
+       'currentCategory': ''
+     })
+    except:
+     abort(422)
   '''
   @TODO: 
   Create a POST endpoint to get questions to play the quiz. 
@@ -228,38 +232,44 @@ def create_app(test_config=None):
   TEST: In the "Play" tab, after a user selects "All" or a category,
   one question at a time is displayed, the user is allowed to answer
   and shown whether they were correct or not. 
+  
+  NOTE: Couldn't get this to work via Web Application due to the "NoneType" errors I've been getting for add, search questions
+  Couldn't get a clear answer (question # 863845)
   '''
   @app.route('/quizzes', methods=['POST'])
   def startQuiz():   
     print('start Quiz')  
-    body = request.get_json()
-    previous_questions = body.get('previous_questions',None)
-    quiz_category = body.get('quiz_category',None)
+    try:
+     body = request.get_json()
+     previous_questions = body.get('previous_questions',None)
+     quiz_category = body.get('quiz_category',None)
     
-    if (quiz_category == 0):
-     quiz = Question.query.all()
-    else:
-     quiz = Question.query.filter_by(category=quiz_category).all()
+     if (quiz_category == 0):
+      quiz = Question.query.all()
+     else:
+      quiz = Question.query.filter_by(category=quiz_category).all()
     
-    if quiz is None:
-        abort(404)
-    selected_questions = []
+     if quiz is None:
+         abort(404)
+     selected_questions = []
     
-    for question in quiz:
-     if (question.id not in previous_questions):
-        selected_questions.append(question.format())
+     for question in quiz:
+      if (question.id not in previous_questions):
+         selected_questions.append(question.format())
     
-    if len(selected_questions) > 0:
-        next_question = random.choice(selected_questions)
-        return jsonify({
-          'success': True,
-          'previousQuestions': previous_questions,
-          'currentQuestion': next_question
-          })
-    else:
-        return jsonify({
-          'success': True
-        })    
+     if len(selected_questions) > 0:
+         next_question = random.choice(selected_questions)
+         return jsonify({
+           'success': True,
+           'previousQuestions': previous_questions,
+           'currentQuestion': next_question
+           })
+     else:
+         return jsonify({
+           'success': True
+         })    
+    except:
+     abort(422)
 
   '''
   @TODO: 
@@ -267,6 +277,53 @@ def create_app(test_config=None):
   including 404 and 422. 
   '''
   
+  @app.errorhandler(404)
+  def undefined_not_found(error):
+    return jsonify({
+        "success": False,
+        "error": 404,
+        "message": "Undefined or not found"
+        }), 404
+        
+  @app.errorhandler(400)
+  def bad_request(error):
+    return jsonify({
+        "success": False,
+        "error": 400,
+        "message": "Bad request"
+        }), 400
+        
+  @app.errorhandler(401)
+  def unauthorized(error):
+    return jsonify({
+        "success": False,
+        "error": 401,
+        "message": "Unauthorized. Need appropriate authentication/access to the API"
+        }), 401
+        
+  @app.errorhandler(403)
+  def forbidden(error):
+    return jsonify({
+        "success": False,
+        "error": 403,
+        "message": "Request forbidden. Authentication or wrong API key"
+        }), 403  
+        
+  @app.errorhandler(422)
+  def unprocessable_entity(error):
+    return jsonify({
+        "success": False,
+        "error": 422,
+        "message": "Unable to process"
+        }), 422
+        
+  @app.errorhandler(500)
+  def internal_server_error(error):
+    return jsonify({
+        "success": False,
+        "error": 500,
+        "message": "Internal server error"
+        }), 500
   return app
 
     
